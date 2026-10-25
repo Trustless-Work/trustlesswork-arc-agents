@@ -1,0 +1,29 @@
+{
+  "name": "trustlesswork-arc-agents",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "eve dev --no-ui",
+    "dev:cron": "while true; do curl -s -X POST \"http://localhost:${PORT:-2000}/eve/v1/dev/schedules/dispatch\" -o /dev/null; sleep 60; done",
+    "build": "eve build",
+    "start": "eve start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "circle:entity-secret": "node --experimental-strip-types scripts/register-entity-secret.ts"
+  },
+  "dependencies": {
+    "@circle-fin/developer-controlled-wallets": "10.8.1",
+    "ai": "^7.0.149",
+    "eve": "0.82.0",
+    "viem": "^2.57.10",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
+  }
+}
