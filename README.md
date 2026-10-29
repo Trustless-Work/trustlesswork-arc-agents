@@ -63,24 +63,118 @@ escrows; roles and wallet never change, every edit is a public version, and escr
 started with. The open code, the version history and the decision log make that power visible; they do not remove it.
 To have no key holder at all, the signer must live outside this stack (for example, in an attested enclave).
 
-## Setup
+## Run it locally on Arc testnet
 
-Requires Node.js 24 and:
+The service runs on your machine and its agents work on Arc testnet. You need:
 
-- a Claude API key (`ANTHROPIC_API_KEY`), or edit `agent/agent.ts` to use another model;
-- a Trustless Work API key for Arc;
-- a Circle developer account with a testnet API key (console.circle.com).
+| What | Where to get it |
+| --- | --- |
+| Node.js 24 | [nodejs.org](https://nodejs.org) |
+| `curl` and `jq` | Your system's package manager |
+| A Claude API key (`ANTHROPIC_API_KEY`) | [console.anthropic.com](https://console.anthropic.com). Or edit `agent/agent.ts` to use another model |
+| A Trustless Work API key for Arc (`TW_API_KEY`) | Ask any member of the Trustless Work team on Telegram, or post in our [Telegram group](https://t.me/+9FJnzKamvEdiZjNh) that you need an API key for the Arc API |
+| A Circle developer account and a testnet API key (`CIRCLE_API_KEY`) | [console.circle.com](https://console.circle.com) |
+
+The agents use Claude Sonnet 5.5, and one decision costs about $0.04. Gas costs you nothing: agent wallets are smart
+contract accounts, and Circle sponsors their gas on testnet.
+
+### 1. Install and configure
 
 ```bash
+git clone https://github.com/Trustless-Work/trustlesswork-arc-agents.git
+cd trustlesswork-arc-agents
 npm install
-cp .env.example .env.local      # fill in the values
+cp .env.example .env.local      # fill in ANTHROPIC_API_KEY, TW_API_KEY and CIRCLE_API_KEY
 npm run circle:entity-secret    # once: creates and registers the Circle entity secret, saved in .env.local
-npm run dev                     # http://localhost:2000
 ```
 
-`eve dev` does not run schedules on their own. To have agents wake by themselves while developing, run
-`npm run dev:cron` next to `npm run dev`: it fires the dispatcher every minute through eve's dev dispatch route. You can
-also wake one agent at once with `POST /agents/:id/check`. A Vercel deployment runs the schedule every minute.
+The entity secret controls every wallet the service creates. The script also saves Circle's recovery file in
+`.data/circle-recovery/`: keep a copy somewhere safe, because it is the only way to reset the secret. `.env.local` and
+`.data/` are git-ignored.
+
+### 2. Start the service
+
+```bash
+npm run dev         # http://localhost:2000
+npm run dev:cron    # in a second terminal
+```
+
+`eve dev` does not run schedules on its own, so `npm run dev:cron` fires the dispatcher every minute through eve's dev
+dispatch route. You can also wake one agent at once with `POST /agents/:id/check`. A Vercel deployment runs the
+schedule every minute.
+
+### 3. Create the agents
+
+This example fills every role of the escrow with an agent: a writer delivers a post, a reviewer judges it, an arbiter
+settles disputes, and an admin holds the admin slot so nobody can change the terms. Each agent gets a new wallet.
+
+```bash
+create() {
+  curl -s -X POST http://localhost:2000/agents -H 'content-type: application/json' -d "$1" |
+    jq -r 'if .agent then "\(.agent.name)  id \(.agent.id)  wallet \(.agent.wallet.address)" else . end'
+}
+create '{"name":"Writer","roles":["serviceProvider"],"instructions":"You write short social media posts. Deliver the post itself as the evidence."}'
+create '{"name":"Reviewer","roles":["approver","releaseSigner"],"instructions":"You review short social media posts. Approve only if every requirement in the escrow description is met exactly, including length limits counted in characters."}'
+create '{"name":"Arbiter","roles":["disputeResolver"],"instructions":"Settle disputes on the escrow terms and the evidence: pay the writer for work that meets them, refund the client otherwise."}'
+create '{"name":"Admin","roles":["admin"]}'
+```
+
+Note each agent's id and wallet.
+
+### 4. Create and fund an escrow that names them
+
+Agents never create or fund escrows; a client does, with its own wallet and testnet USDC from
+[faucet.circle.com](https://faucet.circle.com) (network: Arc testnet). The escrow puts the agents' wallets in its roles:
+
+| Escrow role | Wallet |
+| --- | --- |
+| Service provider and receiver | Writer |
+| Approver and release signer | Reviewer |
+| Dispute resolver | Arbiter |
+| Platform and admin | Admin |
+
+Two ways to be the client:
+
+- **An AI agent with the Circle CLI.** Install the
+  [Trustless Work Arc skill](https://github.com/Trustless-Work/trustlesswork-arc-skill) in an agent such as Claude Code,
+  log in to an Agent Wallet as its README says, and give it a prompt like this one:
+
+  ```text
+  You are a CLIENT agent. Create and fund a Trustless Work single-release escrow on Arc testnet, then stop.
+
+  - Trustless Work API: https://arc-api-demo-production.up.railway.app. API key: in <KEY_FILE>; never print it.
+  - Your wallet (Circle Agent Wallet, logged in on testnet, holding testnet USDC): <YOUR_WALLET>
+  - Amount: 1 USDC, in one milestone: "A post about Arc, at most 280 characters, with no emojis."
+  - Roles: service provider and receiver <WRITER_WALLET>; approver and release signer <REVIEWER_WALLET>;
+    dispute resolver <ARBITER_WALLET>; platform and admin <ADMIN_WALLET>.
+
+  Report the escrow address and the transaction hashes.
+  ```
+
+- **Your own wallet and the API.** The Trustless Work API builds each call (`deploy`, then `approve-token` and `fund`
+  under `/escrow/single-release/v2/`), and you sign and send it with any Arc testnet wallet. The routes are in the
+  [API docs](https://arc-api-demo-production.up.railway.app/docs).
+
+### 5. Watch them work
+
+Within a minute or two of the funding, the writer delivers, the reviewer approves and releases or opens a dispute, and
+the arbiter settles any dispute. Follow each agent with:
+
+```bash
+curl -s http://localhost:2000/agents/<AGENT_ID> | jq
+```
+
+It shows the escrows the agent watches and its decision log, with the reason for each decision and a link to every
+transaction on the Arc testnet explorer.
+
+### If something does not work
+
+| What you see | What to do |
+| --- | --- |
+| `AGENT_WALLET_FAILED` with `CIRCLE_API_KEY is not set` (or `CIRCLE_ENTITY_SECRET`) | Fill it in `.env.local` (step 1) and restart `npm run dev` |
+| `API_KEY_INVALID` from the Trustless Work API | Check `TW_API_KEY` in `.env.local`. Keys expire after 90 days; ask the team for a new one |
+| An agent never reacts | Check that `npm run dev:cron` is running. The first scan only looks about 16 minutes back, so for an escrow created before the service first ran, call `POST /agents/:id/escrows` with `{"escrow": "<address>"}` |
+| `RATE_LIMITED` | The service waits and retries on its own. A key allows 60 requests a minute, and the service reads each open escrow at most once a minute; if you run many escrows at once, ask the team for a higher limit |
 
 ## API
 
@@ -115,4 +209,4 @@ deployment needs a database behind the same functions in `agent/lib/store.ts`.
 
 ## License
 
-Apache-2.0
+[Apache-2.0](LICENSE)
