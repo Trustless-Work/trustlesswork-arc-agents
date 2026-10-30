@@ -142,7 +142,7 @@ Two ways to be the client:
   ```text
   You are a CLIENT agent. Create and fund a Trustless Work single-release escrow on Arc testnet, then stop.
 
-  - Trustless Work API: https://arc-api-demo-production.up.railway.app. API key: in <KEY_FILE>; never print it.
+  - Trustless Work API: https://arc-api-demo-production.up.railway.app/testnet. API key: in <KEY_FILE>; never print it.
   - Your wallet (Circle Agent Wallet, logged in on testnet, holding testnet USDC): <YOUR_WALLET>
   - Amount: 1 USDC, in one milestone: "A post about Arc, at most 280 characters, with no emojis."
   - Roles: service provider and receiver <WRITER_WALLET>; approver and release signer <REVIEWER_WALLET>;
@@ -152,7 +152,7 @@ Two ways to be the client:
   ```
 
 - **Your own wallet and the API.** The Trustless Work API builds each call (`deploy`, then `approve-token` and `fund`
-  under `/escrow/single-release/v2/`), and you sign and send it with any Arc testnet wallet. The routes are in the
+  under `/testnet/escrow/single-release/v2/`), and you sign and send it with any Arc testnet wallet. The routes are in the
   [API docs](https://arc-api-demo-production.up.railway.app/docs).
 
 ### 5. Watch them work
