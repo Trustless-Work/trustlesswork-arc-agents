@@ -20,6 +20,12 @@ export const IMPLEMENTATIONS: Record<EscrowKind, `0x${string}`> = {
   "multi-release": "0xeE68B547c5Ba221CD565718236Bb585cc3b08dF0",
 };
 
+/** Implementations of earlier factories. Their escrows can still finish their flow; nothing new is created on them. */
+export const PREVIOUS_IMPLEMENTATIONS: Record<EscrowKind, readonly `0x${string}`[]> = {
+  "single-release": ["0x1F0E0C5b704B3e10609Bf4862071Db815a0c839b", "0x8E341ca529bB403Be4030Fd06F8b24165d8BA918"],
+  "multi-release": ["0xF7fBE8aca4D4A2A7552167246Df439931da26A5A"],
+};
+
 /** topic0 of the factories' EscrowCreated event; topic1 is the escrow, topic2 the deployer. */
 export const ESCROW_CREATED_TOPIC = "0x6e235dc8d7bb9d0676726c636a9423d8a06a9948a695ffc1e48550812a7ad8ad";
 
@@ -33,6 +39,12 @@ export const ESCROW_EVENT_TOPICS = {
 /** Runtime code of an EIP-1167 clone of `implementation`. Only the official factory can initialize one. */
 export function cloneCode(implementation: string): string {
   return `0x363d3d373d3d3d363d73${implementation.slice(2).toLowerCase()}5af43d82803e903d91602b57fd5bf3`;
+}
+
+/** True when `code` is a clone of the current or an earlier official implementation of `kind`. */
+export function isOfficialCode(code: string | undefined, kind: EscrowKind): boolean {
+  const actual = (code ?? "0x").toLowerCase();
+  return [IMPLEMENTATIONS[kind], ...PREVIOUS_IMPLEMENTATIONS[kind]].some((implementation) => actual === cloneCode(implementation));
 }
 
 /** The escrow calls an agent may sign. */

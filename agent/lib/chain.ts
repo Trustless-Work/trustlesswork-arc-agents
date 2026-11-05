@@ -3,11 +3,10 @@ import { createPublicClient, defineChain, getAddress, http, toHex, type PublicCl
 import { arcRpcUrl } from "./config";
 import {
   ARC_TESTNET,
-  cloneCode,
   ESCROW_CREATED_TOPIC,
   ESCROW_EVENT_TOPICS,
   FACTORIES,
-  IMPLEMENTATIONS,
+  isOfficialCode,
   sameAddress,
   type EscrowKind,
 } from "./network";
@@ -27,10 +26,9 @@ function arc(): PublicClient {
   return client;
 }
 
-/** True when `address` is a clone of the official implementation of `kind`, so the official factory created it. */
+/** True when `address` is a clone of an official implementation of `kind`, current or earlier. */
 export async function isOfficialEscrow(address: `0x${string}`, kind: EscrowKind): Promise<boolean> {
-  const code = await arc().getCode({ address });
-  return (code ?? "0x").toLowerCase() === cloneCode(IMPLEMENTATIONS[kind]);
+  return isOfficialCode(await arc().getCode({ address }), kind);
 }
 
 export async function latestBlock(): Promise<bigint> {

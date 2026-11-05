@@ -45,7 +45,7 @@ Every transaction goes through `agent/lib/actions.ts` before it is signed:
 - the agent's roles, and the roles its wallet holds in that escrow, must allow the action;
 - the escrow must be one the dispatcher assigned to the agent;
 - the Trustless Work API builds the call, and the result is checked against the chain: it must go to the escrow
-  itself, the escrow must be a clone of the official implementation (only the official factory can create one), and
+  itself, the escrow must be a clone of an official implementation, current or earlier (only its factory can create one), and
   the decoded call must be exactly the function and arguments requested.
 
 The model never chooses the wallet, the contract or the call data. Approvers and release signers cannot send funds
