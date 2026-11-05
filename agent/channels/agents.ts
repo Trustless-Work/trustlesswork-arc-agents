@@ -171,7 +171,9 @@ export default defineChannel<undefined, void, WorkTarget>({
     }),
 
     /** Runs the dispatcher now for one agent, instead of waiting for the next minute. */
-    POST("/agents/:id/check", async (_request, { params, from }) => {
+    POST("/agents/:id/check", async (request, { params, from }) => {
+      // It wakes the agent, which spends model tokens, so a deployment does not leave it open.
+      if (!canManage(request)) return problem(401, "UNAUTHORIZED", "Waking an agent needs the factory token.");
       const agent = await store.getAgent(params.id ?? "");
       if (!agent) return problem(404, "AGENT_NOT_FOUND", "No agent with that id.");
       if (agent.deletedAt) return problem(410, "AGENT_DELETED", "This agent was deleted.");

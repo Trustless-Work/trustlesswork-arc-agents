@@ -1,13 +1,14 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { dataDir } from "./config";
+import { databaseUrl, dataDir } from "./config";
 import type { EscrowKind } from "./network";
 import type { AgentRole, EscrowAction } from "./roles";
+import { postgresBackend, type StoreBackend } from "./store-postgres";
 
 /**
- * The agent registry, the escrows each agent watches and its decision log, kept in one JSON file. It is enough for
- * local tests on a single process; a deployment needs a database behind the same functions.
+ * The agent registry, the escrows each agent watches and its decision log, kept as one JSON document: in a local file,
+ * or in Postgres when DATABASE_URL is set, because a deployment's files do not last.
  */
 
 export interface AgentRecord {
@@ -114,18 +115,18 @@ function file(): string {
   return join(dataDir(), "agents.json");
 }
 
-async function load(): Promise<Data> {
+const empty = (): Data => ({ version: 1, agents: {}, watches: {}, decisions: [] });
+
+async function readFileData(): Promise<Data> {
   try {
     return JSON.parse(await readFile(file(), "utf8")) as Data;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return { version: 1, agents: {}, watches: {}, decisions: [] };
-    }
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return empty();
     throw error;
   }
 }
 
-async function save(data: Data): Promise<void> {
+async function saveFileData(data: Data): Promise<void> {
   await mkdir(dataDir(), { recursive: true });
   const tmp = `${file()}.${process.pid}.tmp`;
   await writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600 });
@@ -134,16 +135,32 @@ async function save(data: Data): Promise<void> {
 
 let queue: Promise<unknown> = Promise.resolve();
 
-/** Runs one read-modify-write at a time. */
-function update<T>(change: (data: Data) => T): Promise<T> {
+/** Runs one read-modify-write at a time, which is enough for a single local process. */
+function updateFile<T>(change: (data: Data) => T): Promise<T> {
   const run = queue.then(async () => {
-    const data = await load();
+    const data = await readFileData();
     const result = change(data);
-    await save(data);
+    await saveFileData(data);
     return result;
   });
   queue = run.catch(() => undefined);
   return run;
+}
+
+let postgres: StoreBackend<Data> | undefined;
+
+function load(): Promise<Data> {
+  const url = databaseUrl();
+  if (!url) return readFileData();
+  postgres ??= postgresBackend<Data>(url, empty);
+  return postgres.read();
+}
+
+function update<T>(change: (data: Data) => T): Promise<T> {
+  const url = databaseUrl();
+  if (!url) return updateFile(change);
+  postgres ??= postgresBackend<Data>(url, empty);
+  return postgres.update(change);
 }
 
 export function watchKey(agentId: string, escrow: string): string {

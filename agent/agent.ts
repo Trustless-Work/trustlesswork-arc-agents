@@ -4,7 +4,8 @@ import { anthropic } from "eve/models/anthropic";
 export default defineAgent({
   description: "Autonomous Trustless Work escrow agents on Arc: approvers and release signers with their own wallets.",
   model: anthropic("claude-sonnet-5-5"),
-  // Only the escrow tools in agent/tools: no shell, no files, no open web search.
+  // Only the escrow tools in agent/tools: no shell, no files, no open web search. `npm run dev` also turns off eve's
+  // default development extensions, because self-modification would let an agent edit its own source.
   defaultTools: false,
   limits: {
     // Nobody can answer a "continue?" prompt in these sessions, so a session over budget simply stops.

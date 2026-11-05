@@ -4,6 +4,9 @@ Autonomous agents that take a role in [Trustless Work](https://trustlesswork.com
 create one with its roles, and the agent gets its own Circle wallet. From then on it works alone: when an escrow names
 its wallet, the agent reads it and does its part. No person signs for it.
 
+Trustless Work does not host this service. You run your own copy, with your own Anthropic and Circle accounts, and it
+works on Arc testnet only.
+
 ## Roles
 
 | Role | What the agent does | Woken when |
@@ -100,8 +103,7 @@ npm run dev:cron    # in a second terminal
 ```
 
 `eve dev` does not run schedules on its own, so `npm run dev:cron` fires the dispatcher every minute through eve's dev
-dispatch route. You can also wake one agent at once with `POST /agents/:id/check`. A Vercel deployment runs the
-schedule every minute.
+dispatch route. You can also wake one agent at once with `POST /agents/:id/check`.
 
 ### 3. Create the agents
 
@@ -173,8 +175,46 @@ transaction on the Arc testnet explorer.
 | --- | --- |
 | `AGENT_WALLET_FAILED` with `CIRCLE_API_KEY is not set` (or `CIRCLE_ENTITY_SECRET`) | Fill it in `.env.local` (step 1) and restart `npm run dev` |
 | `API_KEY_INVALID` from the Trustless Work API | Check `TW_API_KEY` in `.env.local`. Keys expire after 90 days; ask the team for a new one |
-| An agent never reacts | Check that `npm run dev:cron` is running. The first scan only looks about 16 minutes back, so for an escrow created before the service first ran, call `POST /agents/:id/escrows` with `{"escrow": "<address>"}` |
+| An agent never reacts | Check that `npm run dev:cron` is running. The first scan only looks about 16 minutes back, so for an escrow created before the service first ran, call `POST /agents/:id/escrows` with `{"escrow": "<address>"}` If the service was stopped for days, the dispatcher first catches up on the blocks it missed, about 2 minutes per day stopped. |
 | `RATE_LIMITED` | The service waits and retries on its own. A key allows 60 requests a minute, and the service reads each open escrow at most once a minute; if you run many escrows at once, ask the team for a higher limit |
+
+## Deploy it yourself (optional)
+
+Running locally is how we run it, and the guide above is all you need for that. If you want your agents always on, you
+can deploy your copy on [Vercel](https://vercel.com), on your own account and at your own cost.
+
+We have not run this on a real Vercel project yet. A production build was tested end to end on one machine with a real
+Postgres, but Vercel Cron, Vercel Workflow and Vercel's own build were not part of that test.
+
+| | Local | Deployed |
+| --- | --- | --- |
+| Agent registry and decision log | `.data/agents.json` | Postgres, through `DATABASE_URL` |
+| Creating, editing, deleting and waking agents | Open | Needs `AGENT_FACTORY_TOKEN` |
+| Trustless Work API key | `TW_API_KEY` or `TW_API_KEY_FILE` | `TW_API_KEY` |
+| Dispatcher | `npm run dev:cron` | Vercel Cron |
+
+**Check your Vercel plan first.** The dispatcher runs every minute. Vercel's Hobby plan
+[only allows cron jobs once a day](https://vercel.com/docs/cron-jobs/usage-and-pricing), and a more frequent one fails the
+deployment. On Hobby, change `cron` in `agent/schedules/dispatch.ts` to once a day, and wake each agent from any scheduler
+you already have with `POST /agents/:id/check`.
+
+1. Register the entity secret on your machine with `npm run circle:entity-secret`, and keep the recovery file safe.
+2. Create a Postgres database, for example from the Vercel Marketplace. The table is created on first use.
+3. Link the project: `npx eve link`.
+4. In the Vercel project, set `ANTHROPIC_API_KEY`, `TW_API_URL` (ending with `/testnet`), `TW_API_KEY`, `CIRCLE_API_KEY`,
+   `CIRCLE_ENTITY_SECRET`, `DATABASE_URL` and `AGENT_FACTORY_TOKEN` (a long random value).
+5. Deploy: `npx eve deploy`.
+6. Check it, then create your agents as in step 3 of the local guide, with the token:
+
+   ```bash
+   curl https://<your-app>/eve/v1/health
+   curl -s -X POST https://<your-app>/agents -H "authorization: Bearer $AGENT_FACTORY_TOKEN" \
+     -H 'content-type: application/json' \
+     -d '{"name":"Post reviewer","roles":["approver","releaseSigner"],"instructions":"Reject posts with emojis."}'
+   ```
+
+Reading an agent and its decision log stays public, as it does locally. Nobody can chat with an agent on a deployment:
+agents only get work from the dispatcher.
 
 ## API
 
@@ -187,7 +227,7 @@ transaction on the Arc testnet explorer.
 | `GET /agents/:id` | An agent, the escrows it watches and its decision log |
 | `GET /agents/:id/escrows/:escrow` | An escrow as the agent sees it (its own `get_escrow` tool) |
 | `POST /agents/:id/escrows` | Asks the agent to watch an escrow created before it existed or outside the scan. Body: `{"escrow"}` |
-| `POST /agents/:id/check` | Runs the dispatcher now for that agent |
+| `POST /agents/:id/check` | Runs the dispatcher now for that agent. Same token rule as creating |
 
 Example:
 
@@ -204,8 +244,12 @@ npm run typecheck
 npx eve info       # what eve discovered
 ```
 
-The agent registry and decision log live in `.data/agents.json`, which is enough for local tests on one process. A
-deployment needs a database behind the same functions in `agent/lib/store.ts`.
+`npm run dev` passes `--no-default-extensions` on purpose. Without it, `eve dev` gives every agent a tool that can edit the
+files under `agent/`, and these agents read content written by third parties. That tool also makes eve change the system
+prompt between an agent's first and second turn on an escrow, which the Anthropic API rejects, so the second turn fails.
+
+Locally, the agent registry and decision log live in `.data/agents.json`. With `DATABASE_URL` set, they live in Postgres.
+To run the Postgres store's tests, set `TEST_DATABASE_URL` to an empty test database.
 
 ## License
 

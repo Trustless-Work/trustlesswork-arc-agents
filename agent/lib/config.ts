@@ -14,7 +14,11 @@ function required(name: string, hint: string): string {
 }
 
 export function twApiUrl(): string {
-  return required("TW_API_URL", "Set it to the Trustless Work API for Arc.").replace(/\/+$/, "");
+  const url = required("TW_API_URL", "Set it to the Trustless Work API for Arc.").replace(/\/+$/, "");
+  if (!url.endsWith("/testnet")) {
+    throw new Error(`TW_API_URL must end with /testnet, because these agents only work on Arc testnet. It is ${url}.`);
+  }
+  return url;
 }
 
 let cachedKey: string | undefined;
@@ -45,6 +49,11 @@ export function circleWalletSetId(): string | undefined {
 
 export function dataDir(): string {
   return optional("AGENTS_DATA_DIR") ?? ".data";
+}
+
+/** Postgres for the agent registry. Without it, the registry is a local file. */
+export function databaseUrl(): string | undefined {
+  return optional("DATABASE_URL");
 }
 
 export function agentFactoryToken(): string | undefined {
