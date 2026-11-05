@@ -11,13 +11,13 @@ export const ARC_TESTNET = {
 export type EscrowKind = "single-release" | "multi-release";
 
 export const FACTORIES: Record<EscrowKind, `0x${string}`> = {
-  "single-release": "0x829fE7040797Df140636901e79F1bA448B7e9ae0",
-  "multi-release": "0x7B04302DCEC430D74e8e38B35Cef96EbaD51b7fC",
+  "single-release": "0xF7A03AceC7F3e68D2aa80964eeF176C0c86d1cD5",
+  "multi-release": "0x1caDf6E6b15e4415B9A3161F26740ac2B25e57a5",
 };
 
 export const IMPLEMENTATIONS: Record<EscrowKind, `0x${string}`> = {
-  "single-release": "0x1F0E0C5b704B3e10609Bf4862071Db815a0c839b",
-  "multi-release": "0xF7fBE8aca4D4A2A7552167246Df439931da26A5A",
+  "single-release": "0x1bd004FdF28316E5626e8012E71C0f5Fb86681EC",
+  "multi-release": "0xeE68B547c5Ba221CD565718236Bb585cc3b08dF0",
 };
 
 /** topic0 of the factories' EscrowCreated event; topic1 is the escrow, topic2 the deployer. */
